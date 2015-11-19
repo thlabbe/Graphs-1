@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>XREF JS</title>
+    <script src="../js/d3.min.js"></script>
+    <script src="../js/jquery-1.10.2.min.js"></script>
+
+   <link rel="stylesheet" type="text/css" href="../css/xref.css">
+</head>
+<body>
+
+<div id="main">
+    <div id="list" >Liste
+      <br>
+<button onclick="addNodes()">Restart Animation</button>
+    </div>
+    <div id="graph">
+    </div>
+    <div id="details">
+      details
+      <div class="infos">
+        label : <span id="info-label"></span><br>
+        type : <span id="info-type"></span><br>
+        id : <span id="info-id"></span><br>
+        targets : <span id="info-targets"></span><br>
+        sources : <span id="info-sources"></span><br>
+      </div>
+    </div>
+
+    </div>
+    <div id="fileView">
+      <input id="fileItem" type="file" multiple>
+      <pre id="contents"></pre>
+    </div>
+<script>
+    var graph;
+    function myGraph() {
+
+        // Add and remove elements on the graph object
+        this.addNode = function (id, label, type) {
+            var l = label || id;
+            var t = type || '?'
+            nodes.push({"id": id, "label":l, "type":t });
+            update();
+        };
+
+        this.removeNode = function (id) {
+            var i = 0;
+            var n = findNode(id);
+            while (i < links.length) {
+                if ((links[i]['source'] == n) || (links[i]['target'] == n)) {
+                    links.splice(i, 1);
+                }
+                else i++;
+            }
+            nodes.splice(findNodeIndex(id), 1);
+            update();
+        };
+
+        this.removeLink = function (source, target) {
+            for (var i = 0; i < links.length; i++) {
+                if (links[i].source.id == source && links[i].target.id == target) {
+                    links.splice(i, 1);
+                    break;
+                }
+            }
+            update();
+        };
+
+        this.removeallLinks = function () {
+            links.splice(0, links.length);
+            update();
+        };
+
+        this.removeAllNodes = function () {
+            nodes.splice(0, links.length);
+            update();
+        };
+
+        this.addLink = function (source, target, value) {
+            links.push({"source": findNode(source), "target": findNode(target), "value": value});
+            update();
+        };
+
+        var findNode = function (id) {
+
+            for (var i in nodes) {
+                if (nodes[i]["id"] === id) {
+                return nodes[i];
+              }
+            }
+            ;
+        };
+
+        var findNodeIndex = function (id) {
+            for (var i = 0; i < nodes.length; i++) {
+                if (nodes[i].id == id) {
+                    return i;
+                }
+            }
+            ;
+        };
+
+        // set up the D3 visualisation in the specified element
+        var w = 960,
+            h = 800;
+
+        var color = d3.scale.category10();
+
+        var vis = d3.select("#graph")
+                .append("svg:svg")
+                .attr("width", w)
+                .attr("height", h)
+                .attr("id", "svg")
+                .attr("pointer-events", "all")
+                .attr("viewBox", "0 0 " + w + " " + h)
+                .attr("perserveAspectRatio", "xMinYMid")
+                .append('svg:g');
+
+        var force = d3.layout.force();
+
+        var nodes = force.nodes(),
+            links = force.links();
+
+        var update = function () {
+
+            var link = vis.selectAll("line")
+                    .data(links, function (d) {
+                        return d.source.id + "-" + d.target.id;
+                    });
+
+            link.enter().append("line")
+                    .attr("id", function (d) {
+                        return d.source.id + "-" + d.target.id;
+                    })
+                    .attr("stroke-width", function (d) {
+                        return d.value / 10;
+                    })
+                    .attr("class", "link");
+            link.append("title")
+                    .text(function (d) {
+                        return d.value;
+                    });
+            link.exit().remove();
+
+            var node = vis.selectAll("g.node")
+                    .data(nodes, function (d) {
+                        return d.id;
+                    });
+
+            var nodeEnter = node.enter().append("g")
+                    .attr("class", "node")
+                    .call(force.drag);
+
+            nodeEnter.append("svg:circle")
+                    .attr("r", 8)
+                    .attr("id", function (d) {
+                        return "Node;" + d.id + d.type;
+                    })
+                    .attr("class", "nodeStrokeClass")
+                    .attr("fill", function(d) { return color(d.type); })
+                    .on("dblclick", function (d) { return activate(d.id); })
+                    .on("click", function (d) { return showDetails(d.id); })
+                    ;
+
+            nodeEnter.append("svg:text")
+                    .attr("class", "textClass")
+                    .attr("x", 14)
+                    .attr("y", ".31em")
+                    .text(function (d) {
+                        return d.label;
+                    });
+
+            node.exit().remove();
+
+            force.on("tick", function () {
+
+                node.attr("transform", function (d) {
+                    return "translate(" + d.x + "," + d.y + ")";
+                });
+
+                link.attr("x1", function (d) {
+                    return d.source.x;
+                })
+                        .attr("y1", function (d) {
+                            return d.source.y;
+                        })
+                        .attr("x2", function (d) {
+                            return d.target.x;
+                        })
+                        .attr("y2", function (d) {
+                            return d.target.y;
+                        });
+            });
+
+            // Restart the force layout.
+            force
+                  //  .gravity(0)
+                    .charge(-120)
+                  //  .friction(.95)
+                    .linkDistance( function(d) { return d.value * 10 } )
+                    .size([w, h])
+                    .start();
+        };
+
+
+        // Make it all go
+        update();
+    }
+
+    function drawGraph() {
+
+        graph = new myGraph("#svgdiv");
+
+
+    keepNodesOnTop();
+
+        // callback for the changes in the network
+        var step = -1;
+        function nextval()
+        {
+            step++;
+            return 2000 + (1500*step); // initial time, wait time
+        }
+    }
+
+    drawGraph();
+
+    function keepNodesOnTop() {
+        $(".nodeStrokeClass").each(function( index ) {
+            var gnode = this.parentNode;
+            gnode.parentNode.appendChild(gnode);
+        });
+    }
+    function addNodes() {
+        d3.select("svg")
+                .remove();
+         drawGraph();
+    }
+
+</script>
+<script src="data/nodeList.json"></script>
+<script src="data/linkList.json"></script>
+<script>
+
+    function populatePre(url) {
+      var xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+          document.getElementById('contents').textContent = this.responseText;
+      };
+      xhr.open('GET', url);
+      xhr.send();
+    };
+    $('#contents').text(  populatePre('./1.Sources/ALGCOP/GJVZVREC.cpy'));
+
+
+    function getNodeById(id) {
+      var res = nodeLIST.filter( function (n) {
+        return n.id === id;
+      });
+      return res[0];
+    };
+
+    function showDetails(id) {
+      var node = getNodeById(id);
+      $('#info-label').replaceWith('<span id="info-label">' + node.label + '</span>');
+      $('#info-type').replaceWith('<span id="info-type">' + node.type + '</span>');
+      $('#info-id').replaceWith('<span id="info-id">'+ node.id +'</span>');
+      $('#info-sources').replaceWith('<span id="info-sources">' + targets(node) + '</span>');
+      $('#info-targets').replaceWith('<span id="info-targets">'+ node.sources +'</span>');
+
+    };
+    function targets(n) {
+      return linkLIST.filter(function (link) {
+                            return link.source == n.id;})
+                         .map( function (link) {
+                            return link.target;})
+                        // .map( function (id) {
+                        //    return getNodeById(id);});
+    };
+    function activate(nodeid) {
+        showDetails(nodeid);
+        var nodeActivated = getNodeById( nodeid) ;
+
+        graph.addNode(nodeActivated.id, nodeActivated.label, nodeActivated.type);
+
+        var tmpTargets = linkLIST
+              .filter(function (link) {
+                return nodeActivated.id == link.source;})
+              .map(function(link) {
+                return link.target; });
+        for (var i in tmpTargets) {
+          var n = getNodeById(tmpTargets[i]);
+          graph.addNode(tmpTargets[i], n.label, n.type);
+          graph.addLink(tmpTargets[i],nodeActivated.id, '10' );
+        }
+
+        var tmpSources = linkLIST
+              .filter(function (link) {
+                return nodeActivated.id == link.target;})
+              .map(function(link) {
+                return link.source; });
+        for (var i in tmpSources)  {
+          var n = getNodeById(tmpSources[i]);
+          graph.addNode(tmpSources[i], n.label, n.type);
+          graph.addLink(nodeActivated.id, tmpSources[i], '10' );
+        }
+
+        keepNodesOnTop();
+  };
+
+    var liste = '<table>' + nodeLIST.map(function(node) {
+            return  '<tr class="item" onclick="activate(\'' + node.id + '\')">' +
+            '<td>' + node.type + '</td>'+
+            '<td>' + node.label + '</td>'+
+            '<td>' + node.targets + '</td>'+
+            '<td>' + node.sources + '</td>' +
+            '</tr>' ;
+
+          }
+        ) + '</table>';
+
+    $('#list').append(liste);
+
+// TODO: creer un dictionaire qui pour un type donné indique le repertoire et l'extension du fichier source
+ var typesExt = [{"type":"BATEZT","ext":[".stw"]}
+               , {"type":"TABSRC","ext":[".Cbl",".cbl",".txt"]}
+               , {"type":"BATSRC","ext":[".stw", ".cblbat", ".Asm"]}
+               , {"type":"ALGCOP","ext":[".cpy"]}
+               , {"type":"PRCCOP","ext":[".cpy"]}
+               , {"type":"BATSTW","ext":[".stw"]}, {"type":"PRCSTW"}, {"type":"ALGSTW"}];
+</script>
+</body>
+</html>
