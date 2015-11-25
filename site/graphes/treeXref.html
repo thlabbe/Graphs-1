@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>XREF JS</title>
+    <script src="../js/d3.min.js"></script>
+    <script src="../js/jquery-1.10.2.min.js"></script>
+
+   <link rel="stylesheet" type="text/css" href="../css/tree-xref.css">
+</head>
+<body>
+  <div id="graph">
+  </div>
+<div id="main">
+    <div id="list" >Liste
+      <br>
+<button onclick="addNodes()">Restart Animation</button>
+    </div>
+
+    <div id="details">
+      details
+      <div class="infos">
+        label : <span id="info-label"></span><br>
+        type : <span id="info-type"></span><br>
+        id : <span id="info-id"></span><br>
+        targets : <span id="info-targets"></span><br>
+        sources : <span id="info-sources"></span><br>
+      </div>
+    </div>
+
+    </div>
+    <div id="fileView">
+      <input id="fileItem" type="file" multiple>
+      <pre id="contents"></pre>
+    </div>
+<script>
+
+</script>
+<script src="data/nodeList.json"></script>
+<script src="data/linkList.json"></script>
+<script>
+    var data =  {/*
+                 "name": "flare", "id":"flare_id",
+                 "children": [
+                  {
+                   "name": "analytics", "id":"analytics_id",
+                   "children": [
+                    {
+                     "name": "cluster", "id":"cluster_id",
+                     "children": [
+                      {"name": "AgglomerativeCluster", "size": 3938, "id":"aglo_id"},
+                      {"name": "CommunityStructure", "size": 3812, "id":"commu_id"},
+                      {"name": "MergeEdge", "size": 743, "id":"name_id"}
+                     ]
+                    },
+                    {
+                     "name": "graph", "id":"graph_id",
+                     "children": [
+                      {"name": "BetweennessCentrality", "size": 3534, "id":"betw_id"},
+                      {"name": "LinkDistance", "size": 5731, "id":"link_id"}
+                     ]
+                    }
+                   ]
+                  }
+                 ]*/
+    };
+    var m = [20, 120, 20, 120],
+        w = 1280 - m[1] - m[3],
+        h = 800 - m[0] - m[2],
+        i = 0,
+        root;
+
+    var tree = d3.layout.cluster()//.tree()
+        .size([h, w]);
+
+    var diagonal = d3.svg.diagonal()
+        .projection(function(d) { return [d.y, d.x]; });
+
+    var vis = d3.select("#graph").append("svg:svg")
+        .attr("width", w + m[1] + m[3])
+        .attr("height", h + m[0] + m[2])
+        .append("svg:g")
+        .attr("transform", "translate(" + m[3] + "," + m[0] + ")");
+
+    root = data;
+    root.x0 = h / 2;
+    root.y0 = 0;
+
+
+    function update(source) {
+      var duration = d3.event && d3.event.altKey ? 5000 : 500;
+
+      // Compute the new tree layout.
+      var nodes = tree.nodes(root).reverse();
+
+      // Normalize for fixed-depth.
+      nodes.forEach(function(d) { d.y = d.depth * 180; });
+
+      // Update the nodes…
+      var node = vis.selectAll("g.node")
+          .data(nodes, function(d) { return d.id || (d.id = ++i); });
+
+      // Enter any new nodes at the parent's previous position.
+      var nodeEnter = node.enter().append("svg:g")
+          .attr("class", "node")
+          .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
+          .on("click", function(d) {/*THOMAS */console.log(d); activate(d.id);  toggle(d); update(d); });
+
+      nodeEnter.append("svg:circle")
+          .attr("r", 1e-6)
+          .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+
+      nodeEnter.append("svg:text")
+          .attr("x", function(d) { return d.children || d._children ? -10 : 10; })
+          .attr("dy", ".35em")
+          .attr("text-anchor", function(d) { return d.children || d._children ? "end" : "start"; })
+          .text(function(d) { return d.name; })
+          .style("fill-opacity", 1e-6);
+
+      // Transition nodes to their new position.
+      var nodeUpdate = node.transition()
+          .duration(duration)
+          .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
+
+      nodeUpdate.select("circle")
+          .attr("r", 4.5)
+          .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+
+      nodeUpdate.select("text")
+          .style("fill-opacity", 1);
+
+      // Transition exiting nodes to the parent's new position.
+      var nodeExit = node.exit().transition()
+          .duration(duration)
+          .attr("transform", function(d) { return "translate(" + source.y + "," + source.x + ")"; })
+          .remove();
+
+      nodeExit.select("circle")
+          .attr("r", 1e-6);
+
+      nodeExit.select("text")
+          .style("fill-opacity", 1e-6);
+
+      // Update the links…
+      var link = vis.selectAll("path.link")
+          .data(tree.links(nodes), function(d) { return d.target.id; });
+
+      // Enter any new links at the parent's previous position.
+      link.enter().insert("svg:path", "g")
+          .attr("class", "link")
+          .attr("d", function(d) {
+            var o = {x: source.x0, y: source.y0};
+            return diagonal({source: o, target: o});
+          })
+        .transition()
+          .duration(duration)
+          .attr("d", diagonal);
+
+      // Transition links to their new position.
+      link.transition()
+          .duration(duration)
+          .attr("d", diagonal);
+
+      // Transition exiting nodes to the parent's new position.
+      link.exit().transition()
+          .duration(duration)
+          .attr("d", function(d) {
+            var o = {x: source.x, y: source.y};
+            return diagonal({source: o, target: o});
+          })
+          .remove();
+
+      // Stash the old positions for transition.
+      nodes.forEach(function(d) {
+        d.x0 = d.x;
+        d.y0 = d.y;
+      });
+    }
+
+    // Toggle children.
+    function toggle(d) {
+      if (d.children) {
+        d._children = d.children;
+        d.children = null;
+      } else {
+        d.children = d._children;
+        d._children = null;
+      }
+    }
+
+    var treeTargets
+      , treeSources;
+
+    function addChildresn(id) {
+      node = getNodeById(id);
+
+    }
+    function getNodeById(id) {
+      var res = nodeLIST.filter( function (n) {
+        return n.id === id;
+      });
+      return res[0];
+    }
+
+    function showDetails(id) {
+      var node = getNodeById(id);
+      $('#info-label').replaceWith('<span id="info-label">' + node.label + '</span>');
+      $('#info-type').replaceWith('<span id="info-type">' + node.type + '</span>');
+      $('#info-id').replaceWith('<span id="info-id">'+ node.id +'</span>');
+      $('#info-sources').replaceWith('<span id="info-sources">' + targets(node) + '</span>');
+      $('#info-targets').replaceWith('<span id="info-targets">'+ sources(node) +'</span>');
+    }
+
+    function targets(n) {
+      return linkLIST.filter( function (link) {
+                            return link.source == n.id;})
+                     .map( function (link) {
+                          return link.target;})
+    }
+    function sources(n) {
+      return linkLIST .filter(function (link) {
+                            return link.target == n.id;})
+                      .map( function (link) {
+                            return link.source;})
+    }
+
+
+function addSubTree(data, subtree) {
+    console.log("function addSubTree");
+console.log("data :");
+console.log(data);
+console.log("subtree :");
+console.log(subtree);
+    if(data === null ) {return subtree;}
+    if(data.id == subtree.id) {return subtree;}
+    for (var i = 0; i < data.children.length; i++) {
+      id = data.children[i].id;
+      if (id == subtree.id) {
+console.log("found " + id);
+        data.children[i] =  addSubTree(data.children[i], subtree);
+      }
+    }
+    return data;
+}
+
+    function activate(id) {
+      var node = getNodeById(id);
+      var subdata = { "id": id,
+               "name" : node.label,
+               "children":targets(node)
+                  .map(function (n) {
+                    return { "id": n,
+                            "name": getNodeById(n).label};
+                  })
+      };
+      data = addSubTree(data, subdata);
+      root = data;
+      update(root);
+    }
+    function init(id) {
+          var node = getNodeById(id);
+          //childrens = targets(node).map( function(n) {return "name": + });
+
+          var subdata = { "id": id,
+                   "name" : node.label,
+                   "children":targets(node)
+                      .map(function (n) {
+                        return { "id": n,
+                                "name": getNodeById(n).label};
+                      })
+          };
+         console.log(subdata);
+          data = addSubTree(null, subdata);
+          console.log("data");console.log(data);
+          root = data;
+          console.log(data);
+          update(root);
+        showDetails(id);
+  }
+ update(root);
+    var liste = '<table>' + nodeLIST.map(function(node) {
+            return  '<tr class="item" onclick="init(\'' + node.id + '\')">' +
+            '<td>' + node.type + '</td>'+
+            '<td>' + node.label + '</td>'+
+            '<td>' + node.targets + '</td>'+
+            '<td>' + node.sources + '</td>' +
+            '</tr>' ;
+
+          }
+        ) + '</table>';
+
+    $('#list').append(liste);
+
+// TODO: creer un dictionaire qui pour un type donné indique le repertoire et l'extension du fichier source
+ var typesExt = [{"type":"BATEZT","ext":[".stw"]}
+               , {"type":"TABSRC","ext":[".Cbl",".cbl",".txt"]}
+               , {"type":"BATSRC","ext":[".stw", ".cblbat", ".Asm"]}
+               , {"type":"ALGCOP","ext":[".cpy"]}
+               , {"type":"PRCCOP","ext":[".cpy"]}
+               , {"type":"BATSTW","ext":[".stw"]}, {"type":"PRCSTW"}, {"type":"ALGSTW"}];
+</script>
+</body>
+</html>
